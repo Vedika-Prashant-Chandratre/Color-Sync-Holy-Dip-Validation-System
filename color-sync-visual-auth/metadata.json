@@ -1,0 +1,5 @@
+{
+  "name": "Color-Sync Visual Auth",
+  "description": "Deterministic offline visual authentication system using HMAC-SHA256 for synchronized signal generation.",
+  "requestFramePermissions": []
+}

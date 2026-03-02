@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Color-Sync Visual Auth</title>
+    <style>
+        :root {
+            --bg: #f8fafc;
+            --panel: #ffffff;
+            --text: #1e293b;
+            --accent: #2563eb;
+            --border: #e2e8f0;
+            --f-mono: 'JetBrains Mono', 'Fira Code', monospace;
+            --f-sans: 'Inter', system-ui, -apple-system, sans-serif;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: var(--f-sans);
+            overflow: hidden;
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #booking-screen {
+            background: var(--panel);
+            padding: 2.5rem;
+            border-radius: 1rem;
+            border: 1px solid var(--border);
+            width: 100%;
+            max-width: 400px;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+            z-index: 10;
+        }
+
+        h1 {
+            font-size: 1.5rem;
+            margin-bottom: 1.5rem;
+            letter-spacing: -0.02em;
+            font-weight: 700;
+            color: var(--accent);
+            text-align: center;
+        }
+
+        .field { margin-bottom: 1.25rem; }
+        label { display: block; font-size: 0.75rem; text-transform: uppercase; font-weight: 600; color: #64748b; margin-bottom: 0.5rem; letter-spacing: 0.05em; }
+        
+        input, select {
+            width: 100%;
+            background: #fff;
+            border: 1px solid var(--border);
+            padding: 0.75rem;
+            color: var(--text);
+            border-radius: 0.5rem;
+            font-family: var(--f-sans);
+            font-size: 0.9rem;
+            transition: border-color 0.2s;
+        }
+
+        input:focus, select:focus {
+            outline: none;
+            border-color: var(--accent);
+            ring: 2px solid var(--accent);
+        }
+
+        button {
+            width: 100%;
+            background: var(--accent);
+            color: #fff;
+            border: none;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            font-weight: 600;
+            cursor: pointer;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            transition: transform 0.1s, opacity 0.2s, background-color 0.2s;
+            margin-top: 0.5rem;
+        }
+
+        button:active { transform: scale(0.98); }
+        button:hover { background-color: #1d4ed8; }
+
+        #execution-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            display: none;
+            background: #000;
+        }
+
+        canvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        #overlay {
+            position: absolute;
+            bottom: 2rem;
+            left: 2rem;
+            font-family: var(--f-mono);
+            font-size: 0.85rem;
+            background: #000000;
+            color: #ffffff;
+            padding: 1.25rem;
+            border-left: 4px solid var(--accent);
+            pointer-events: none;
+            border-radius: 0 0.5rem 0.5rem 0;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.8);
+            line-height: 1.6;
+            z-index: 100;
+        }
+
+        .hidden { display: none !important; }
+    </style>
+</head>
+<body>
+
+    <div id="booking-screen">
+        <h1>Visual Auth Sync</h1>
+        <div class="field">
+            <label>Operator Name</label>
+            <input type="text" id="user-name" placeholder="Enter name..." value="Operator-01">
+        </div>
+        <div class="field">
+            <label>Assigned Slot</label>
+            <select id="slot-id">
+                <option value="SLOT-A-20260302">04:40 – 05:05 (SLOT-A)</option>
+                <option value="SLOT-B-20260302">05:05 – 05:30 (SLOT-B)</option>
+                <option value="SLOT-C-20260302">05:30 – 05:55 (SLOT-C)</option>
+            </select>
+        </div>
+        <button id="book-btn">Initialize Sync</button>
+    </div>
+
+    <div id="execution-screen">
+        <canvas id="visual-canvas"></canvas>
+        <div id="overlay">
+            <div id="status-slot">SLOT: --</div>
+            <div id="status-time">TIME: --</div>
+            <div id="status-hash">SIG: --</div>
+        </div>
+    </div>
+
+    <script>
+        // Deterministic Master Key (Hex)
+        const MASTER_HEX = "7d8f9a2b3c4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0";
+        
+        // Helper to convert Hex string to Uint8Array
+        function hexToBytes(hex) {
+            const bytes = new Uint8Array(hex.length / 2);
+            for (let i = 0; i < hex.length; i += 2) {
+                bytes[i / 2] = parseInt(hex.substr(i, 2), 16);
+            }
+            return bytes;
+        }
+
+        const DAILY_MASTER_KEY = hexToBytes(MASTER_HEX);
+        
+        let state = {
+            slotId: null,
+            slotKey: null,
+            timeOffset: 0,
+            isRunning: false
+        };
+
+        const canvas = document.getElementById('visual-canvas');
+        const ctx = canvas.getContext('2d');
+        
+        function resize() {
+            canvas.width = window.innerWidth * window.devicePixelRatio;
+            canvas.height = window.innerHeight * window.devicePixelRatio;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        async function hmacSha256(key, data) {
+            const encoder = new TextEncoder();
+            const keyData = key instanceof Uint8Array ? key : encoder.encode(key);
+            const msgData = typeof data === 'string' ? encoder.encode(data) : data;
+            
+            const cryptoKey = await crypto.subtle.importKey(
+                'raw', keyData, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']
+            );
+            
+            const signature = await crypto.subtle.sign('HMAC', cryptoKey, msgData);
+            return new Uint8Array(signature);
+        }
+
+        async function deriveSlotKey(masterKey, slotId) {
+            // Deterministic derivation: HMAC(master_bytes, "slot_derivation:" + slotId)
+            return await hmacSha256(masterKey, `slot_derivation:${slotId}`);
+        }
+
+        async function getNetworkTime() {
+            try {
+                // Fetch from a reliable time API to handle device clock drift
+                const response = await fetch('https://worldtimeapi.org/api/timezone/Etc/UTC', { timeout: 5000 });
+                const data = await response.json();
+                return new Date(data.datetime).getTime();
+            } catch (e) {
+                // Fallback to local time if offline or API fails
+                console.warn("Network time sync failed, using local clock.");
+                return Date.now();
+            }
+        }
+
+        document.getElementById('book-btn').addEventListener('click', async () => {
+            const btn = document.getElementById('book-btn');
+            const name = document.getElementById('user-name').value;
+            const slotId = document.getElementById('slot-id').value;
+            
+            if (!name) return alert("Name required");
+
+            btn.disabled = true;
+            btn.textContent = "Synchronizing Time...";
+
+            // 1. Establish precise time offset relative to global UTC
+            const serverTime = await getNetworkTime();
+            state.timeOffset = serverTime - Date.now(); 
+            
+            // 2. Derive deterministic slot key
+            state.slotId = slotId;
+            state.slotKey = await deriveSlotKey(DAILY_MASTER_KEY, slotId);
+            
+            document.getElementById('booking-screen').classList.add('hidden');
+            document.getElementById('execution-screen').style.display = 'block';
+            
+            // Ensure canvas is correctly sized after display: block
+            resize();
+            
+            state.isRunning = true;
+            startExecution();
+        });
+
+        let lastIndex = -1;
+        let currentSignal = null;
+
+        async function updateSignal() {
+            const correctedTime = Date.now() + state.timeOffset;
+            const timeIndex = Math.floor(correctedTime / 1000);
+            
+            if (timeIndex !== lastIndex) {
+                lastIndex = timeIndex;
+                const data = `${state.slotId}:${timeIndex}`;
+                currentSignal = await hmacSha256(state.slotKey, data);
+                
+                // Update UI
+                document.getElementById('status-slot').textContent = `SLOT: ${state.slotId}`;
+                document.getElementById('status-time').textContent = `INDEX: ${timeIndex}`;
+                const hex = Array.from(currentSignal.slice(0, 8)).map(b => b.toString(16).padStart(2, '0')).join('');
+                document.getElementById('status-hash').textContent = `SIG: ${hex}...`;
+            }
+        }
+
+        function render() {
+            if (!state.isRunning || !currentSignal) {
+                requestAnimationFrame(render);
+                return;
+            }
+
+            const bytes = currentSignal;
+            const w = canvas.width;
+            const h = canvas.height;
+
+            // Reset transform and state for background
+            ctx.setTransform(1, 0, 0, 1, 0, 0);
+            ctx.shadowBlur = 0;
+            ctx.shadowColor = 'transparent';
+
+            // 1. Background (first 3 bytes)
+            const r = bytes[0];
+            const g = bytes[1];
+            const b = bytes[2];
+            ctx.fillStyle = `rgb(${r}, ${g}, ${b})`;
+            ctx.fillRect(0, 0, w, h);
+
+            const time = Date.now() / 1000;
+
+            // 2. Rotation Speed (bytes 3-4)
+            const rotBase = (bytes[3] << 8 | bytes[4]) / 65535;
+            const rotation = time * (rotBase * 2 - 1) * 2;
+
+            // 3. Grid Density (bytes 5-6)
+            const densityBase = (bytes[5] << 8 | bytes[6]) / 65535;
+            const gridSize = 40 + densityBase * 100;
+
+            // 4. Animation Speed (bytes 7-8)
+            const animBase = (bytes[7] << 8 | bytes[8]) / 65535;
+            const pulse = Math.sin(time * animBase * 5) * 0.5 + 0.5;
+
+            // 5. Shape Distortion (remaining bytes)
+            const distortion = bytes.slice(9, 15);
+            
+            ctx.save();
+            ctx.translate(w/2, h/2);
+            ctx.rotate(rotation);
+
+            // Draw Grid
+            ctx.strokeStyle = `rgba(255,255,255,${0.1 + pulse * 0.2})`;
+            ctx.lineWidth = 2;
+            const range = Math.max(w, h) * 1.5;
+            for(let x = -range; x < range; x += gridSize) {
+                ctx.beginPath();
+                ctx.moveTo(x, -range);
+                ctx.lineTo(x, range);
+                ctx.stroke();
+            }
+            for(let y = -range; y < range; y += gridSize) {
+                ctx.beginPath();
+                ctx.moveTo(-range, y);
+                ctx.lineTo(range, y);
+                ctx.stroke();
+            }
+
+            // Draw Central Geometry
+            ctx.beginPath();
+            const sides = 3 + (distortion[0] % 6);
+            const radius = Math.min(w, h) * 0.2 * (0.8 + pulse * 0.4);
+            
+            for(let i = 0; i <= sides; i++) {
+                const angle = (i / sides) * Math.PI * 2;
+                const dx = Math.cos(angle) * radius;
+                const dy = Math.sin(angle) * radius;
+                
+                // Apply distortion
+                const offX = Math.sin(angle * (distortion[1] % 5) + time) * (distortion[2] % 30);
+                const offY = Math.cos(angle * (distortion[3] % 5) + time) * (distortion[4] % 30);
+                
+                if(i === 0) ctx.moveTo(dx + offX, dy + offY);
+                else ctx.lineTo(dx + offX, dy + offY);
+            }
+            
+            ctx.shadowBlur = 40;
+            ctx.shadowColor = `rgba(255,255,255,0.5)`;
+            ctx.strokeStyle = '#fff';
+            ctx.lineWidth = 8;
+            ctx.stroke();
+            ctx.restore();
+
+            requestAnimationFrame(render);
+        }
+
+        async function startExecution() {
+            setInterval(updateSignal, 100); // Check for second change frequently
+            render();
+        }
+    </script>
+</body>
+</html>
