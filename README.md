@@ -1,10 +1,10 @@
-Color-Sync Deterministic Visual Authentication (CDVA)
+# Color-Sync Deterministic Visual Authentication (CDVA)
 
 Offline-first, scalable, deterministic visual validation system designed for high-density event entry (e.g., holy dip slot verification).
 
 This system allows 1 million+ users in the same time slot to generate an identical, time-synchronized dynamic visual signal — without real-time server validation.
 
-🚀 Overview
+## Overview
 
 Instead of scanning individual QR codes, this system works as follows:
 
@@ -20,7 +20,7 @@ No centralized validation at the gate.
 No network dependency.
 < 1 second verification for entire batch.
 
-🧠 Core Algorithm
+## Core Algorithm
 
 Each device generates a deterministic signal every second:
 
@@ -52,7 +52,7 @@ Police device → same output
 
 No randomness involved
 
-⏱ Clock Drift Handling
+## Clock Drift Handling
 
 Devices may have ±60 seconds drift.
 
@@ -83,8 +83,8 @@ Entry denied
 
 This prevents cascade desynchronization.
 
-🔐 Replay & Screenshot Attack Prevention
-1️⃣ Dynamic Per-Second Signal
+### Replay & Screenshot Attack Prevention
+### Dynamic Per-Second Signal
 
 Signal changes every second:
 
@@ -96,7 +96,7 @@ Screenshot becomes invalid in 1 second.
 
 Recorded video becomes outdated instantly.
 
-2️⃣ Cryptographic Binding
+## Cryptographic Binding
 
 Signal depends on:
 
@@ -110,7 +110,7 @@ Without slot_key, attacker cannot compute future signals.
 
 HMAC prevents forgery even if attacker sees output.
 
-3️⃣ No Static Colors
+## No Static Colors
 
 Visual is not a simple color.
 It includes:
@@ -125,7 +125,7 @@ Motion variation
 
 So replayed images are detectable visually.
 
-📈 Why It Scales to 1 Million Users
+## Why It Scales to 1 Million Users
 No Central Validation
 
 At entry gate:
@@ -158,7 +158,7 @@ O(1) per batch
 
 < 1 second
 
-⚠ Biggest Failure Risk at Scale
+## Biggest Failure Risk at Scale
 Time Desynchronization Cascade
 
 If large number of users have incorrect offset:
@@ -183,7 +183,7 @@ Key Leakage	Daily rotation of master key
 Reverse Engineering	Secure enclave storage
 Rooted Devices	App attestation
 Slot Key Extraction	Derived per-slot keys only
-🔑 Security Model Summary
+## Security Model Summary
 
 HMAC-SHA256 ensures unforgeable signals.
 
@@ -195,7 +195,7 @@ Offline deterministic generation eliminates network dependency.
 
 Dynamic visual output prevents screenshot replay.
 
-🏁 Final Properties
+## Final Properties
 
 ✔ 1M concurrent users
 ✔ Offline validation
