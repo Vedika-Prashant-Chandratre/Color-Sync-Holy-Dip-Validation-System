@@ -1,28 +1,30 @@
 # Color-Sync Deterministic Visual Authentication (CDVA)
 
-Offline-first, scalable, deterministic visual validation system designed for high-density event entry (e.g., holy dip slot verification).
+A scalable, offline-first visual authentication system that enables synchronized, cryptographically generated dynamic signals across millions of devices without centralized real-time validation.
 
-This system allows 1 million+ users in the same time slot to generate an identical, time-synchronized dynamic visual signal — without real-time server validation.
+This project demonstrates how large crowds can be validated in under one second using deterministic time-based cryptographic signals instead of per-user QR scanning.
 
-## Overview
+## What This Project Does
 
-Instead of scanning individual QR codes, this system works as follows:
+Users book a time slot.
 
-All users in a specific slot generate the same dynamic visual pattern every second.
+Each device derives a cryptographic slot key.
 
-Police devices independently generate the same signal.
+Every second, the app generates a deterministic HMAC-based signal.
 
-If the crowd’s screen matches the officer’s device → entry allowed.
+The signal drives a full-screen animated visual pattern.
 
-Works fully offline after slot booking.
+All users in the same slot display identical visuals at the same second.
 
-No centralized validation at the gate.
-No network dependency.
-< 1 second verification for entire batch.
+A verification device independently computes the same signal.
 
-## Core Algorithm
+If visuals match → entry allowed.
 
-Each device generates a deterministic signal every second:
+No live server validation required at the checkpoint.
+
+## Core Concept
+
+The visual signal is generated using:
 
 slot_key = HKDF(daily_master_key, slot_id)
 
@@ -30,177 +32,72 @@ time_index = floor((device_time + offset) / 1000)
 
 signal = HMAC_SHA256(slot_key, slot_id + ":" + time_index)
 
-The signal hash bytes are used to generate:
+All animation parameters (color, rotation, grid density, motion speed) are derived directly from the HMAC output bytes.
 
-Background color
+This ensures:
 
-Rotation angle
+Determinism across devices
 
-Grid density
+Per-second dynamic change
 
-Animation speed
+No randomness
 
-Shape distortion
+No screenshot replay viability
 
-All visual parameters are derived directly from hash bytes.
+## Security Properties
 
-Because HMAC is deterministic:
+HMAC-SHA256 prevents forgery
 
-All users in same slot → same output
+Daily key rotation limits exposure
 
-Police device → same output
+Slot-based key isolation
 
-No randomness involved
+Per-second signal mutation prevents replay
 
-## Clock Drift Handling
+Global time synchronization mitigates clock drift (±60s tolerance)
 
-Devices may have ±60 seconds drift.
+Fully offline operation after initial sync
 
-We handle this during slot booking:
+## Scalability
 
-offset = server_time - device_time
+Designed for:
 
-During execution:
+1,000,000+ concurrent users
 
-corrected_time = Date.now() + offset
+20-minute peak windows
 
-Then:
+< 1 second verification
 
-time_index = floor(corrected_time / 1000)
-Tolerance Strategy
+Zero server dependency at entry
 
-Police device accepts signals in a ±60 second window:
+Each device performs O(1) computation locally.
 
-valid_time_index ∈ [t-60, t+60]
+## Testing Focus
 
-This prevents rejection due to minor time drift.
+Cross-device deterministic validation
 
-If drift > 2 minutes:
+Time drift simulation
 
-User must resync during booking phase
+Replay attack resistance
 
-Entry denied
+Multi-device synchronization stability
 
-This prevents cascade desynchronization.
+Offline operation verification
 
-### Replay & Screenshot Attack Prevention
-### Dynamic Per-Second Signal
+## Tech Stack
 
-Signal changes every second:
+HTML5 Canvas
 
-signal(t) ≠ signal(t+1)
+Web Crypto API
 
-So:
+HMAC-SHA256
 
-Screenshot becomes invalid in 1 second.
+HKDF-based key derivation
 
-Recorded video becomes outdated instantly.
+Monotonic time correction logic
 
-## Cryptographic Binding
+## Why This Matters
 
-Signal depends on:
+Traditional QR validation does not scale for massive crowds and fails under network outages.
 
-slot_id
-
-daily_master_key
-
-time_index
-
-Without slot_key, attacker cannot compute future signals.
-
-HMAC prevents forgery even if attacker sees output.
-
-## No Static Colors
-
-Visual is not a simple color.
-It includes:
-
-Rotating geometry
-
-Animated grid
-
-Hash-derived distortion
-
-Motion variation
-
-So replayed images are detectable visually.
-
-## Why It Scales to 1 Million Users
-No Central Validation
-
-At entry gate:
-
-No database lookup
-
-No QR scan
-
-No network call
-
-Each device computes locally in O(1) time.
-
-Server Load Exists Only During Booking
-
-Booking is horizontally scalable:
-
-Stateless slot issuance
-
-Sharded slot databases
-
-CDN distribution of app
-
-During entry:
-
-Zero server dependency.
-
-Police verification cost:
-
-O(1) per batch
-
-< 1 second
-
-## Biggest Failure Risk at Scale
-Time Desynchronization Cascade
-
-If large number of users have incorrect offset:
-
-Entire batch could visually mismatch.
-
-Causes crowd delay.
-
-Mitigation
-
-Strict offset calibration at booking.
-
-Use monotonic clock after calibration.
-
-Dual-window tolerance.
-
-Police device can quickly cycle ±60 second window.
-
-Other Risks
-Risk	Mitigation
-Key Leakage	Daily rotation of master key
-Reverse Engineering	Secure enclave storage
-Rooted Devices	App attestation
-Slot Key Extraction	Derived per-slot keys only
-## Security Model Summary
-
-HMAC-SHA256 ensures unforgeable signals.
-
-HKDF isolates slot keys.
-
-Daily master key rotation limits exposure window.
-
-Offline deterministic generation eliminates network dependency.
-
-Dynamic visual output prevents screenshot replay.
-
-## Final Properties
-
-✔ 1M concurrent users
-✔ Offline validation
-✔ <1 second police verification
-✔ No QR scanning
-✔ No central server load at entry
-✔ Screenshot resistant
-✔ Replay resistant
+This approach replaces per-user verification with synchronized cryptographic consensus — enabling instant batch validation at scale.
